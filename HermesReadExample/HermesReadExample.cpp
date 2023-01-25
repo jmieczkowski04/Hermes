@@ -28,9 +28,9 @@ int main()
 
     HermesReader reader(hhf, haf);
 
-    uint8* file = 0;
+    uint8* file;
     std::string fName(""); // name of file to search
-    reader.LoadFile(fName, &file);
+    reader.LoadFile(fName, file);
     if (file == 0)
         std::cout << "File " << fName << " not found";
 

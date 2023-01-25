@@ -13,6 +13,7 @@ namespace fs = std::filesystem;
 
 uint16 GetCompression(const char* method);
 int CompareEntries(const void* a, const void* b);
+HHFEntry ProcessFile(FILE* haf, FILE* input, uint16 compressor, uint64 pathHash);
 
 int main(int argc, char* argv[])
 {
@@ -58,7 +59,6 @@ int main(int argc, char* argv[])
     fs::path hhfPath(manifestRoot);
     hhfPath.replace_filename(fileName);
     hhfPath.replace_extension(".hhf");
-    
 
     fs::path hafPath(hhfPath);
     hafPath.replace_extension(".haf");
@@ -101,63 +101,31 @@ int main(int argc, char* argv[])
         }
         
         //read data
-
-        fs::path lPath(manifestRoot);
-        lPath.replace_filename(cstrOrginalPath);
-
-        FILE* f;
-        fopen_s(&f, lPath.string().c_str(), "rb");
-
-        if (!f)
         {
-            std::cout << "Error opening file: " << lPath;
-            fclose(hafFile);
-            return 1;
+            fs::path lPath(manifestRoot);
+            lPath.replace_filename(cstrOrginalPath);
+
+            FILE* f;
+            fopen_s(&f, lPath.string().c_str(), "rb");
+
+            if (!f)
+            {
+                std::cout << "Error opening file: " << lPath;
+                fclose(hafFile);
+                return 1;
+            }
+
+            uint16 compressor = GetCompression(cstrCompression);
+
+            std::string stringPath(cstrOutputPath);
+            uint64 path = Hash64((uint8*)stringPath.data(), (uint8*)stringPath.data() + stringPath.size());
+
+            HHFEntry entry = ProcessFile(hafFile, f, compressor, path);
+            fclose(f);
+
+            entries.push_back(entry);
         }
-        fseek(f, 0, SEEK_END);
-
-        int32 size = ftell(f);
-
-        fseek(f, 0, SEEK_SET);
         
-        uint8* data = new uint8[size];
-
-        fread(data, sizeof(uint8), size, f);
-
-        fclose(f);
-
-        //calculate and compress data
-
-        uint16 compressor = GetCompression(cstrCompression);
-
-        std::string stringPath(cstrOutputPath);
-        uint64 path = Hash64((uint8*)stringPath.data(), (uint8*)stringPath.data() + stringPath.size());
-
-        uint32 compressedSize = GetCompressionMaxSize(compressor, size);
-
-        uint8* targetData = new uint8[compressedSize];
-
-        uint32 realSize = Compress(compressor, data, targetData, size, compressedSize);
-
-        delete[] data;
-
-        uint32 hafPos = ftell(hafFile);
-
-        uint64 dataHash = Hash64(targetData, targetData + realSize);
-
-        uint32 flags = compressor;
-
-        HHFEntry entry = {};
-        entry.flags = flags;
-        entry.hash = dataHash;
-        entry.offset = hafPos;
-        entry.path = path;
-        entry.size = realSize;
-        entry.sizeNoCompression = size;
-
-        fwrite(targetData, sizeof(uint8), realSize, hafFile);
-
-        entries.push_back(entry);
     }
 
     fclose(hafFile);
@@ -191,6 +159,35 @@ int main(int argc, char* argv[])
     fclose(hhfFile);
 
     return 0;
+}
+
+HHFEntry ProcessFile(FILE* haf, FILE* input, uint16 compressor, uint64 pathHash)
+{
+    fseek(input, 0, SEEK_END);
+    int32 size = ftell(input);
+    fseek(input, 0, SEEK_SET);
+
+    uint8* data = new uint8[size];
+    fread(data, sizeof(uint8), size, input);
+
+    uint32 compressedSize = GetCompressionMaxSize(compressor, size);
+    uint8* targetData = new uint8[compressedSize];
+    uint32 realSize = Compress(compressor, data, targetData, size, compressedSize);
+    delete[] data;
+
+    uint32 Position = ftell(haf);
+    uint64 dataHash = Hash64(targetData, targetData + realSize);
+
+    fwrite(targetData, sizeof(uint8), realSize, haf);
+
+    HHFEntry entry = {};
+    entry.path = pathHash;
+    entry.flags = compressor;
+    entry.sizeNoCompression = size;
+    entry.size = realSize;
+    entry.offset = Position;
+    entry.hash = dataHash;
+    return entry;
 }
 
 

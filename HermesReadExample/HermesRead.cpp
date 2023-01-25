@@ -14,7 +14,7 @@ HermesReader::HermesReader(FILE* file1, FILE* file2) : hhf(file1), haf(file2), e
 		throw new std::runtime_error("Header file is corupted!");
 }
 
-void HermesReader::LoadFile(std::string name, uint8** pointer)
+void HermesReader::LoadFile(std::string name, uint8*& pointer)
 {
 	uint64 fileName = Hash64((uint8*)name.data(), (uint8*)name.data() + name.size());
 	int32 entry = LookForEntry(fileName);
@@ -33,9 +33,9 @@ void HermesReader::LoadFile(std::string name, uint8** pointer)
 
 	uint16 c = entries[entry].flags;
 	uint32 size = entries[entry].sizeNoCompression;
-	(*pointer) = new uint8[size];
+	pointer = new uint8[size];
 
-	uint32 sizeNC = Decompress(c, bytes, *pointer, realSize, size);
+	uint32 sizeNC = Decompress(c, bytes, pointer, realSize, size);
 	if (sizeNC != size)
 	{
 		throw new std::runtime_error("Something wrong with compression");
